@@ -1,10 +1,10 @@
 use crate::action::{Action, ActionManager, LintReason};
-use crate::build::*;
+// use crate::build::*;
 use crate::config::ConfigStrategy;
 use crate::definition::DefinitionProvider;
 use crate::diagnostics::DiagnosticsManager;
 use crate::folding::FoldingProvider;
-use crate::forward_search;
+// use crate::forward_search;
 use crate::highlight::HighlightProvider;
 use crate::link::LinkProvider;
 use crate::reference::ReferenceProvider;
@@ -35,7 +35,7 @@ pub struct LatexLspServer<C> {
     client_capabilities: OnceCell<Arc<ClientCapabilities>>,
     distribution: Arc<Box<dyn Distribution>>,
     config_strategy: OnceCell<Box<dyn ConfigStrategy>>,
-    build_manager: BuildManager<C>,
+    // build_manager: BuildManager<C>,
     workspace_manager: WorkspaceManager,
     action_manager: ActionManager,
     diagnostics_manager: Mutex<DiagnosticsManager>,
@@ -59,7 +59,7 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
             client_capabilities: OnceCell::new(),
             distribution: Arc::clone(&distribution),
             config_strategy: OnceCell::new(),
-            build_manager: BuildManager::new(client),
+            // build_manager: BuildManager::new(client),
             workspace_manager: WorkspaceManager::new(distribution),
             action_manager: ActionManager::default(),
             diagnostics_manager: Mutex::new(DiagnosticsManager::default()),
@@ -209,8 +209,8 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
             LintReason::Save,
         ));
         self.action_manager.push(Action::PublishDiagnostics);
-        self.action_manager
-            .push(Action::Build(params.text_document.uri.into()));
+        // self.action_manager
+        //     .push(Action::Build(params.text_document.uri.into()));
     }
 
     #[jsonrpc_method("textDocument/didClose", kind = "notification")]
@@ -399,48 +399,48 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
         Ok(foldings)
     }
 
-    #[jsonrpc_method("textDocument/build", kind = "request")]
-    pub async fn build(&self, params: BuildParams) -> Result<BuildResult> {
-        let request = self.make_feature_request(params.text_document.as_uri(), params)?;
-        let options = self
-            .configuration()
-            .await
-            .latex
-            .and_then(|opts| opts.build)
-            .unwrap_or_default();
-        let result = self.build_manager.build(request, options).await;
-        Ok(result)
-    }
+    // #[jsonrpc_method("textDocument/build", kind = "request")]
+    // pub async fn build(&self, params: BuildParams) -> Result<BuildResult> {
+    //     let request = self.make_feature_request(params.text_document.as_uri(), params)?;
+    //     let options = self
+    //         .configuration()
+    //         .await
+    //         .latex
+    //         .and_then(|opts| opts.build)
+    //         .unwrap_or_default();
+    //     let result = self.build_manager.build(request, options).await;
+    //     Ok(result)
+    // }
 
-    #[jsonrpc_method("textDocument/forwardSearch", kind = "request")]
-    pub async fn forward_search(
-        &self,
-        params: TextDocumentPositionParams,
-    ) -> Result<ForwardSearchResult> {
-        let request = self.make_feature_request(params.text_document.as_uri(), params)?;
-        let options = self
-            .configuration()
-            .await
-            .latex
-            .and_then(|opts| opts.forward_search)
-            .unwrap_or_default();
+    // #[jsonrpc_method("textDocument/forwardSearch", kind = "request")]
+    // pub async fn forward_search(
+    //     &self,
+    //     params: TextDocumentPositionParams,
+    // ) -> Result<ForwardSearchResult> {
+    //     let request = self.make_feature_request(params.text_document.as_uri(), params)?;
+    //     let options = self
+    //         .configuration()
+    //         .await
+    //         .latex
+    //         .and_then(|opts| opts.forward_search)
+    //         .unwrap_or_default();
 
-        match request.document().uri.to_file_path() {
-            Ok(tex_file) => {
-                let parent = request
-                    .workspace()
-                    .find_parent(&request.document().uri)
-                    .unwrap_or(request.view.document);
-                let parent = parent.uri.to_file_path().unwrap();
-                forward_search::search(&tex_file, &parent, request.params.position.line, options)
-                    .await
-                    .ok_or_else(|| "Unable to execute forward search".into())
-            }
-            Err(()) => Ok(ForwardSearchResult {
-                status: ForwardSearchStatus::Failure,
-            }),
-        }
-    }
+    //     match request.document().uri.to_file_path() {
+    //         Ok(tex_file) => {
+    //             let parent = request
+    //                 .workspace()
+    //                 .find_parent(&request.document().uri)
+    //                 .unwrap_or(request.view.document);
+    //             let parent = parent.uri.to_file_path().unwrap();
+    //             forward_search::search(&tex_file, &parent, request.params.position.line, options)
+    //                 .await
+    //                 .ok_or_else(|| "Unable to execute forward search".into())
+    //         }
+    //         Err(()) => Ok(ForwardSearchResult {
+    //             status: ForwardSearchStatus::Failure,
+    //         }),
+    //     }
+    // }
 
     async fn configuration(&self) -> Options {
         self.config_strategy
@@ -501,29 +501,29 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
         }
     }
 
-    async fn update_build_diagnostics(&self) {
-        let workspace = self.workspace_manager.get();
-        let mut diagnostics_manager = self.diagnostics_manager.lock().await;
-        for document in &workspace.documents {
-            if document.uri.scheme() != "file" {
-                continue;
-            }
+    // async fn update_build_diagnostics(&self) {
+    //     let workspace = self.workspace_manager.get();
+    //     let mut diagnostics_manager = self.diagnostics_manager.lock().await;
+    //     for document in &workspace.documents {
+    //         if document.uri.scheme() != "file" {
+    //             continue;
+    //         }
 
-            if let SyntaxTree::Latex(tree) = &document.tree {
-                if tree.env.is_standalone {
-                    match diagnostics_manager.build.update(&document.uri) {
-                        Ok(true) => self.action_manager.push(Action::PublishDiagnostics),
-                        Ok(false) => (),
-                        Err(why) => warn!(
-                            "Unable to read log file ({}): {}",
-                            why,
-                            document.uri.as_str()
-                        ),
-                    }
-                }
-            }
-        }
-    }
+    //         if let SyntaxTree::Latex(tree) = &document.tree {
+    //             if tree.env.is_standalone {
+    //                 match diagnostics_manager.build.update(&document.uri) {
+    //                     Ok(true) => self.action_manager.push(Action::PublishDiagnostics),
+    //                     Ok(false) => (),
+    //                     Err(why) => warn!(
+    //                         "Unable to read log file ({}): {}",
+    //                         why,
+    //                         document.uri.as_str()
+    //                     ),
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 
     async fn detect_root(&self, uri: Uri) {
         if uri.scheme() == "file" {
@@ -573,7 +573,7 @@ impl<C: LspClient + Send + Sync + 'static> Middleware for LatexLspServer<C> {
 
     #[boxed]
     async fn after_message(&self) {
-        self.update_build_diagnostics().await;
+        // self.update_build_diagnostics().await;
         for action in self.action_manager.take() {
             match action {
                 Action::RegisterCapabilities => {
@@ -669,21 +669,21 @@ impl<C: LspClient + Send + Sync + 'static> Middleware for LatexLspServer<C> {
                         }
                     }
                 }
-                Action::Build(uri) => {
-                    let options = self
-                        .configuration()
-                        .await
-                        .latex
-                        .and_then(|opts| opts.build)
-                        .unwrap_or_default();
+                Action::Build(_uri) => {
+                    // let options = self
+                    //     .configuration()
+                    //     .await
+                    //     .latex
+                    //     .and_then(|opts| opts.build)
+                    //     .unwrap_or_default();
 
-                    if options.on_save() {
-                        let text_document = TextDocumentIdentifier::new(uri.into());
-                        self.build(BuildParams { text_document }).await.unwrap();
-                    }
+                    // if options.on_save() {
+                    //     let text_document = TextDocumentIdentifier::new(uri.into());
+                    //     self.build(BuildParams { text_document }).await.unwrap();
+                    // }
                 }
-                Action::CancelBuild(token) => {
-                    self.build_manager.cancel(token).await;
+                Action::CancelBuild(_token) => {
+                    // self.build_manager.cancel(token).await;
                 }
             }
         }
