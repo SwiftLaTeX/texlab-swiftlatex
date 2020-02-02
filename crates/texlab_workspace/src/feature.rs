@@ -14,8 +14,8 @@ pub struct DocumentView {
 }
 
 impl DocumentView {
-    pub fn new(workspace: Arc<Workspace>, document: Arc<Document>) -> Self {
-        let related_documents = workspace.related_documents(&document.uri);
+    pub fn new(workspace: Arc<Workspace>, document: Arc<Document>, options: &Options) -> Self {
+        let related_documents = workspace.related_documents(&document.uri, options);
         Self {
             workspace,
             document,
@@ -29,6 +29,7 @@ pub struct FeatureRequest<P> {
     pub view: DocumentView,
     pub client_capabilities: Arc<ClientCapabilities>,
     pub distribution: Arc<Box<dyn Distribution>>,
+    pub options: Options,
 }
 
 impl<P> FeatureRequest<P> {
@@ -131,6 +132,7 @@ pub struct FeatureSpec {
     pub include_declaration: bool,
     pub client_capabilities: ClientCapabilities,
     pub distribution: Box<dyn Distribution>,
+    pub options: Options,
 }
 
 impl Default for FeatureSpec {
@@ -143,6 +145,7 @@ impl Default for FeatureSpec {
             include_declaration: false,
             client_capabilities: ClientCapabilities::default(),
             distribution: Box::new(UnknownDistribution::default()),
+            options: Options::default(),
         }
     }
 }
@@ -170,7 +173,7 @@ impl FeatureSpec {
         let workspace = builder.workspace;
         let main_uri = Self::uri(self.main_file);
         let main_document = workspace.find(&main_uri.into()).unwrap();
-        DocumentView::new(Arc::new(workspace), main_document)
+        DocumentView::new(Arc::new(workspace), main_document, &self.options)
     }
 
     fn request<T>(self, params: T) -> FeatureRequest<T> {
@@ -179,6 +182,7 @@ impl FeatureSpec {
             view: self.view(),
             client_capabilities: Arc::new(self.client_capabilities),
             distribution: Arc::new(self.distribution),
+            options: self.options,
         }
     }
 }

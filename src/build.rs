@@ -46,8 +46,8 @@ where
             .current_dir(path.parent().unwrap())
             .spawn()?;
 
-        let stdout = BufReader::new(process.stdout().take().unwrap()).lines();
-        let stderr = BufReader::new(process.stderr().take().unwrap()).lines();
+        let stdout = BufReader::new(process.stdout.take().unwrap()).lines();
+        let stderr = BufReader::new(process.stderr.take().unwrap()).lines();
         let mut output = stream::select(stdout, stderr);
 
         while let Some(Ok(line)) = output.next().await {
@@ -74,7 +74,7 @@ where
     async fn execute<'a>(&'a self, request: &'a FeatureRequest<BuildParams>) -> BuildResult {
         let document = request
             .workspace()
-            .find_parent(&request.document().uri)
+            .find_parent(&request.document().uri, &request.options)
             .or_else(|| request.workspace().find(&request.document().uri))
             .unwrap();
 
