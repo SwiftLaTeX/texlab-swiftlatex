@@ -8,7 +8,7 @@ use self::latex::citation::LatexCitationHoverProvider;
 use self::latex::component::LatexComponentHoverProvider;
 use self::latex::include::LatexIncludeHoverProvider;
 use self::latex::label::LatexLabelHoverProvider;
-use self::latex::preview::LatexPreviewHoverProvider;
+// use self::latex::preview::LatexPreviewHoverProvider;
 use futures_boxed::boxed;
 use texlab_protocol::{Hover, TextDocumentPositionParams};
 use texlab_workspace::*;
@@ -28,7 +28,7 @@ impl HoverProvider {
                 Box::new(LatexComponentHoverProvider),
                 Box::new(LatexIncludeHoverProvider),
                 Box::new(LatexLabelHoverProvider),
-                Box::new(LatexPreviewHoverProvider),
+                // Box::new(LatexPreviewHoverProvider),
             ]),
         }
     }

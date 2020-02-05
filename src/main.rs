@@ -8,6 +8,8 @@ use stderrlog::{ColorChoice, Timestamp};
 use texlab::server::LatexLspServer;
 use texlab_distro::Distribution;
 use texlab_protocol::{LatexLspClient, LspCodec};
+use tokio::net::TcpListener;
+use tokio::net::TcpStream;
 use tokio_util::codec::{FramedRead, FramedWrite};
 
 #[tokio::main]
@@ -46,31 +48,60 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .init()
         .unwrap();
 
-    let mut stdin = FramedRead::new(tokio::io::stdin(), LspCodec);
-    let (stdout_tx, mut stdout_rx) = mpsc::channel(0);
+    let mut listener = TcpListener::bind("127.0.0.1:9998").await?;
 
+    loop {
+        let (socket, addr) = listener.accept().await?;
+        tokio::spawn(accept_connection(socket, addr));
+    }
+}
+
+async fn accept_connection(mut socket: TcpStream, addr: std::net::SocketAddr) {
+    println!("hello there! start serving {}", addr);
+    let (reader, writer) = socket.split();
+    let mut stdout = FramedWrite::new(writer, LspCodec);
+    let mut stdin = FramedRead::new(reader, LspCodec);
+    let (stdout_tx, mut stdout_rx) = mpsc::channel(0);
+    let distro = Arc::new(Distribution::detect().await);
     let client = Arc::new(LatexLspClient::new(stdout_tx.clone()));
     let server = Arc::new(LatexLspServer::new(
         Arc::clone(&client),
-        Arc::new(Distribution::detect().await),
+        Arc::clone(&distro),
     ));
+    let mut stdout_tx_shutdown = stdout_tx.clone();
     let mut handler = MessageHandler {
-        server,
-        client,
+        server: Arc::clone(&server),
+        client: Arc::clone(&client),
         output: stdout_tx,
     };
 
-    tokio::spawn(async move {
-        let mut stdout = FramedWrite::new(tokio::io::stdout(), LspCodec);
-        loop {
-            let message = stdout_rx.next().await.unwrap();
-            stdout.send(message).await.unwrap();
+    tokio::join!(
+        async move {
+            loop {
+                let message = stdout_rx.next().await.unwrap();
+                if message == "kill" {
+                    break;
+                }
+                let status = stdout.send(message).await;
+                match status {
+                    Ok(_) => {}
+                    Err(_) => break,
+                }
+            }
+        },
+        async move {
+            while let Some(json) = stdin.next().await {
+                match &json {
+                    Ok(jsonmsg) => handler.handle(jsonmsg).await,
+                    Err(_) => {
+                        break;
+                    }
+                }
+            }
+            stdout_tx_shutdown.send("kill".to_string()).await.unwrap();
+            println!("Connection break {}", addr);
         }
-    });
+    );
 
-    while let Some(json) = stdin.next().await {
-        handler.handle(&json.unwrap()).await;
-    }
-
-    Ok(())
+    println!("Connection cleanup! {}", addr);
 }

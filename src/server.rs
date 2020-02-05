@@ -209,8 +209,8 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
             LintReason::Save,
         ));
         self.action_manager.push(Action::PublishDiagnostics);
-        // self.action_manager
-        //     .push(Action::Build(params.text_document.uri.into()));
+        self.action_manager
+            .push(Action::Build(params.text_document.uri.into()));
     }
 
     #[jsonrpc_method("textDocument/didClose", kind = "notification")]
@@ -426,48 +426,52 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
         Ok(foldings)
     }
 
-    // #[jsonrpc_method("textDocument/build", kind = "request")]
-    // pub async fn build(&self, params: BuildParams) -> Result<BuildResult> {
-    //     let request = self.make_feature_request(params.text_document.as_uri(), params)?;
-    //     let options = self
-    //         .configuration()
-    //         .await
-    //         .latex
-    //         .and_then(|opts| opts.build)
-    //         .unwrap_or_default();
-    //     let result = self.build_manager.build(request, options).await;
-    //     Ok(result)
-    // }
+    #[jsonrpc_method("textDocument/build", kind = "request")]
+    pub async fn build(&self, _params: BuildParams) -> Result<BuildResult> {
+        // let request = self
+        //     .make_feature_request(params.text_document.as_uri(), params)
+        //     .await?;
+        // let options = self
+        //     .configuration(true)
+        //     .await
+        //     .latex
+        //     .and_then(|opts| opts.build)
+        //     .unwrap_or_default();
+        // let result = self.build_manager.build(request, options).await;
+        Ok(BuildResult {
+            status: BuildStatus::Failure,
+        })
+    }
 
-    // #[jsonrpc_method("textDocument/forwardSearch", kind = "request")]
-    // pub async fn forward_search(
-    //     &self,
-    //     params: TextDocumentPositionParams,
-    // ) -> Result<ForwardSearchResult> {
-    //     let request = self.make_feature_request(params.text_document.as_uri(), params)?;
-    //     let options = self
-    //         .configuration()
-    //         .await
-    //         .latex
-    //         .and_then(|opts| opts.forward_search)
-    //         .unwrap_or_default();
+    #[jsonrpc_method("textDocument/forwardSearch", kind = "request")]
+    pub async fn forward_search(
+        &self,
+        _params: TextDocumentPositionParams,
+    ) -> Result<ForwardSearchResult> {
+        // let request = self
+        //     .make_feature_request(params.text_document.as_uri(), params)
+        //     .await?;
+        // let options = self.configuration(true).await;
 
-    //     match request.document().uri.to_file_path() {
-    //         Ok(tex_file) => {
-    //             let parent = request
-    //                 .workspace()
-    //                 .find_parent(&request.document().uri)
-    //                 .unwrap_or(request.view.document);
-    //             let parent = parent.uri.to_file_path().unwrap();
-    //             forward_search::search(&tex_file, &parent, request.params.position.line, options)
-    //                 .await
-    //                 .ok_or_else(|| "Unable to execute forward search".into())
-    //         }
-    //         Err(()) => Ok(ForwardSearchResult {
-    //             status: ForwardSearchStatus::Failure,
-    //         }),
-    //     }
-    // }
+        // match request.document().uri.to_file_path() {
+        //     Ok(tex_file) => {
+        //         let parent = request
+        //             .workspace()
+        //             .find_parent(&request.document().uri, &options)
+        //             .unwrap_or(request.view.document);
+        //         let parent = parent.uri.to_file_path().unwrap();
+        //         forward_search::search(&tex_file, &parent, request.params.position.line, options)
+        //             .await
+        //             .ok_or_else(|| "Unable to execute forward search".into())
+        //     }
+        //     Err(()) => Ok(ForwardSearchResult {
+        //         status: ForwardSearchStatus::Failure,
+        //     }),
+        // }
+        Ok(ForwardSearchResult {
+            status: ForwardSearchStatus::Failure,
+        })
+    }
 
     async fn configuration(&self, fetch: bool) -> Options {
         if let Some(strategy) = self.config_strategy.get() {
@@ -531,10 +535,11 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
         }
     }
 
-
     // async fn update_build_diagnostics(&self) {
     //     let workspace = self.workspace_manager.get();
     //     let mut diagnostics_manager = self.diagnostics_manager.lock().await;
+    //     let options = self.configuration(false).await;
+
     //     for document in &workspace.documents {
     //         if document.uri.scheme() != "file" {
     //             continue;
@@ -542,7 +547,7 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
 
     //         if let SyntaxTree::Latex(tree) = &document.tree {
     //             if tree.env.is_standalone {
-    //                 match diagnostics_manager.build.update(&document.uri) {
+    //                 match diagnostics_manager.build.update(&document.uri, &options) {
     //                     Ok(true) => self.action_manager.push(Action::PublishDiagnostics),
     //                     Ok(false) => (),
     //                     Err(why) => warn!(
@@ -555,8 +560,6 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
     //         }
     //     }
     // }
-
-    
 
     async fn detect_root(&self, uri: Uri) {
         if uri.scheme() == "file" {
@@ -705,7 +708,7 @@ impl<C: LspClient + Send + Sync + 'static> Middleware for LatexLspServer<C> {
                 }
                 Action::Build(_uri) => {
                     // let options = self
-                    //     .configuration()
+                    //     .configuration(true)
                     //     .await
                     //     .latex
                     //     .and_then(|opts| opts.build)
@@ -715,7 +718,6 @@ impl<C: LspClient + Send + Sync + 'static> Middleware for LatexLspServer<C> {
                     //     let text_document = TextDocumentIdentifier::new(uri.into());
                     //     self.build(BuildParams { text_document }).await.unwrap();
                     // }
-
                 }
                 Action::CancelBuild(_token) => {
                     // self.build_manager.cancel(token).await;
