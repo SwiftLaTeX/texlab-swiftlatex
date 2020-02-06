@@ -5,10 +5,12 @@ use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 use texlab_protocol::*;
 use texlab_workspace::Document;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct LatexDiagnosticsProvider {
     diagnostics_by_uri: HashMap<Uri, Vec<Diagnostic>>,
+    last_lint_time: u64,
 }
 
 impl LatexDiagnosticsProvider {
@@ -23,9 +25,15 @@ impl LatexDiagnosticsProvider {
         if uri.scheme() != "file" {
             return;
         }
-
-        self.diagnostics_by_uri
+        let current_time = SystemTime::now();
+        let since_the_epoch = current_time.duration_since(UNIX_EPOCH).expect("Time went backwards");
+        let current_timestamp = since_the_epoch.as_secs();
+        /* Every one minute */
+        if current_timestamp > self.last_lint_time + 60 {
+            self.last_lint_time = current_timestamp;
+            self.diagnostics_by_uri
             .insert(uri.clone(), lint(text).unwrap_or_default());
+        }
     }
 }
 

@@ -696,6 +696,7 @@ impl<C: LspClient + Send + Sync + 'static> Middleware for LatexLspServer<C> {
                         LintReason::Change => options.on_change(),
                         LintReason::Save => options.on_save(),
                     };
+                    
                     if should_lint {
                         let workspace = self.workspace_manager.get();
                         if let Some(document) = workspace.find(&uri) {

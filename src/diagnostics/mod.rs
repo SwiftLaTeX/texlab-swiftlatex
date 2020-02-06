@@ -1,14 +1,16 @@
 mod bibtex;
-mod build;
+// mod build;
 mod latex;
 
 pub use self::bibtex::BibtexErrorCode;
 
 use self::bibtex::BibtexDiagnosticsProvider;
 // use self::build::BuildDiagnosticsProvider;
+use self::english::EnglishDiagnosticsProvider;
 use self::latex::LatexDiagnosticsProvider;
 use texlab_protocol::Diagnostic;
 use texlab_workspace::Document;
+
 
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct DiagnosticsManager {

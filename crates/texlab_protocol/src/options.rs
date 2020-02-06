@@ -22,11 +22,11 @@ pub struct LatexLintOptions {
 
 impl LatexLintOptions {
     pub fn on_change(&self) -> bool {
-        self.on_change.unwrap_or(false)
+        self.on_change.unwrap_or(true)
     }
 
     pub fn on_save(&self) -> bool {
-        self.on_save.unwrap_or(false)
+        self.on_save.unwrap_or(true)
     }
 }
 
