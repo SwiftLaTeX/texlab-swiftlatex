@@ -32,28 +32,32 @@ impl ClientCapabilitiesExt for ClientCapabilities {
     }
 
     fn has_work_done_progress_support(&self) -> bool {
-        self.window.as_ref().and_then(|cap| cap.work_done_progress) == Some(true)
+        // self.window.as_ref().and_then(|cap| cap.work_done_progress) == Some(true)
+        false
     }
 
     fn has_hover_markdown_support(&self) -> bool {
-        self.text_document
-            .as_ref()
-            .and_then(|cap| cap.hover.as_ref())
-            .and_then(|cap| cap.content_format.as_ref())
-            .filter(|formats| formats.contains(&MarkupKind::Markdown))
-            .is_some()
+        // self.text_document
+        //     .as_ref()
+        //     .and_then(|cap| cap.hover.as_ref())
+        //     .and_then(|cap| cap.content_format.as_ref())
+        //     .filter(|formats| formats.contains(&MarkupKind::Markdown))
+        //     .is_some()
+        false
     }
 
     fn has_pull_configuration_support(&self) -> bool {
-        self.workspace.as_ref().and_then(|cap| cap.configuration) == Some(true)
+        // self.workspace.as_ref().and_then(|cap| cap.configuration) == Some(true)
+        false
     }
 
     fn has_push_configuration_support(&self) -> bool {
-        self.workspace
-            .as_ref()
-            .and_then(|cap| cap.did_change_configuration)
-            .and_then(|cap| cap.dynamic_registration)
-            == Some(true)
+        // self.workspace
+        //     .as_ref()
+        //     .and_then(|cap| cap.did_change_configuration)
+        //     .and_then(|cap| cap.dynamic_registration)
+        //     == Some(true)
+        false
     }
 }
 

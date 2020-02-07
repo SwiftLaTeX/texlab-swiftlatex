@@ -180,6 +180,7 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
 
     #[jsonrpc_method("textDocument/didOpen", kind = "notification")]
     pub fn did_open(&self, params: DidOpenTextDocumentParams) {
+        // println!("did_open request starts");
         let uri = params.text_document.uri.clone();
         self.workspace_manager.add(params.text_document);
         self.action_manager
@@ -187,10 +188,12 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
         self.action_manager
             .push(Action::RunLinter(Uri::from(uri), LintReason::Save));
         self.action_manager.push(Action::PublishDiagnostics);
+        // println!("did_open request done");
     }
 
     #[jsonrpc_method("textDocument/didChange", kind = "notification")]
     pub fn did_change(&self, params: DidChangeTextDocumentParams) {
+        // println!("did_change request starts");
         for change in params.content_changes {
             let uri = params.text_document.uri.clone();
             self.workspace_manager.update(uri.into(), change.text);
@@ -200,10 +203,12 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
             LintReason::Change,
         ));
         self.action_manager.push(Action::PublishDiagnostics);
+        // println!("did_change request done");
     }
 
     #[jsonrpc_method("textDocument/didSave", kind = "notification")]
     pub fn did_save(&self, params: DidSaveTextDocumentParams) {
+        // println!("did_save request starts");
         self.action_manager.push(Action::RunLinter(
             params.text_document.uri.clone().into(),
             LintReason::Save,
@@ -211,6 +216,7 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
         self.action_manager.push(Action::PublishDiagnostics);
         self.action_manager
             .push(Action::Build(params.text_document.uri.into()));
+        // println!("did_save request done");
     }
 
     #[jsonrpc_method("textDocument/didClose", kind = "notification")]
@@ -218,29 +224,38 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
 
     #[jsonrpc_method("workspace/didChangeConfiguration", kind = "notification")]
     pub fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
+        // println!("did_change_configuration request starts");
         self.action_manager
             .push(Action::UpdateConfiguration(params.settings));
+        // println!("did_change_configuration request done");
     }
 
     #[jsonrpc_method("window/workDoneProgress/cancel", kind = "notification")]
     pub fn work_done_progress_cancel(&self, params: WorkDoneProgressCancelParams) {
+        // println!("cancel request starts");
         self.action_manager.push(Action::CancelBuild(params.token));
+        // println!("cancel request done");
     }
 
     #[jsonrpc_method("textDocument/completion", kind = "request")]
     pub async fn completion(&self, params: CompletionParams) -> Result<CompletionList> {
+        // println!("completion request starts");
         let request = self
             .make_feature_request(params.text_document_position.as_uri(), params)
             .await?;
+        // println!("completion request step 1");
         let items = self.completion_provider.execute(&request).await;
+        // println!("completion request done");
         Ok(CompletionList {
             is_incomplete: true,
             items,
         })
+       
     }
 
     #[jsonrpc_method("completionItem/resolve", kind = "request")]
     pub async fn completion_resolve(&self, mut item: CompletionItem) -> Result<CompletionItem> {
+        // println!("completion_resolve request starts");
         let data: CompletionItemData = serde_json::from_value(item.data.clone().unwrap()).unwrap();
         match data {
             CompletionItemData::Package | CompletionItemData::Class => {
@@ -259,15 +274,18 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
             }
             _ => {}
         };
+        // println!("completion_resolve request done");
         Ok(item)
     }
 
     #[jsonrpc_method("textDocument/hover", kind = "request")]
     pub async fn hover(&self, params: TextDocumentPositionParams) -> Result<Option<Hover>> {
+        // println!("hover request start");
         let request = self
             .make_feature_request(params.text_document.as_uri(), params)
             .await?;
         let hover = self.hover_provider.execute(&request).await;
+        // println!("hover request done");
         Ok(hover)
     }
 
@@ -276,6 +294,7 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
         &self,
         params: TextDocumentPositionParams,
     ) -> Result<DefinitionResponse> {
+        // println!("definition request start");
         let request = self
             .make_feature_request(params.text_document.as_uri(), params)
             .await?;
@@ -290,16 +309,18 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
                     .collect(),
             )
         };
-
+        // println!("definition request done");
         Ok(response)
     }
 
     #[jsonrpc_method("textDocument/references", kind = "request")]
     pub async fn references(&self, params: ReferenceParams) -> Result<Vec<Location>> {
+        // println!("textDocument request start");
         let request = self
             .make_feature_request(params.text_document_position.as_uri(), params)
             .await?;
         let results = self.reference_provider.execute(&request).await;
+        // println!("textDocument request done");
         Ok(results)
     }
 
@@ -308,10 +329,12 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
         &self,
         params: TextDocumentPositionParams,
     ) -> Result<Vec<DocumentHighlight>> {
+        // println!("documentHighlight request start");
         let request = self
             .make_feature_request(params.text_document.as_uri(), params)
             .await?;
         let results = self.highlight_provider.execute(&request).await;
+        // println!("documentHighlight request done");
         Ok(results)
     }
 
@@ -320,6 +343,7 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
         &self,
         params: WorkspaceSymbolParams,
     ) -> Result<Vec<SymbolInformation>> {
+        // println!("workspace_symbol request start");
         let distribution = Arc::clone(&self.distribution);
         let client_capabilities = Arc::clone(&self.client_capabilities.get().unwrap());
         let workspace = self.workspace_manager.get();
@@ -332,6 +356,7 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
             &params,
         )
         .await;
+        // println!("workspace_symbol request done");
         Ok(symbols)
     }
 
@@ -340,6 +365,7 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
         &self,
         params: DocumentSymbolParams,
     ) -> Result<DocumentSymbolResponse> {
+        // println!("document_symbol request start");
         let request = self
             .make_feature_request(params.text_document.as_uri(), params)
             .await?;
@@ -351,15 +377,19 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
             &request.options,
             symbols.into_iter().map(Into::into).collect(),
         );
+        // println!("document_symbol request done");
         Ok(response)
     }
 
     #[jsonrpc_method("textDocument/documentLink", kind = "request")]
     pub async fn document_link(&self, params: DocumentLinkParams) -> Result<Vec<DocumentLink>> {
+        // println!("document_link request start");
         let request = self
             .make_feature_request(params.text_document.as_uri(), params)
             .await?;
+        // println!("document_link request step 2a"); 
         let links = self.link_provider.execute(&request).await;
+        // println!("document_link request done");
         Ok(links)
     }
 
@@ -419,10 +449,13 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
 
     #[jsonrpc_method("textDocument/foldingRange", kind = "request")]
     pub async fn folding_range(&self, params: FoldingRangeParams) -> Result<Vec<FoldingRange>> {
+        // println!("folding_range request start");
         let request = self
             .make_feature_request(params.text_document.as_uri(), params)
             .await?;
+        // println!("folding_range request step 1");
         let foldings = self.folding_provider.execute(&request).await;
+        // println!("folding_range request done");
         Ok(foldings)
     }
 
@@ -482,14 +515,17 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
     }
 
     async fn make_feature_request<P>(&self, uri: Uri, params: P) -> Result<FeatureRequest<P>> {
+        // println!("f1");
         let workspace = self.workspace_manager.get();
         let client_capabilities = self
             .client_capabilities
             .get()
             .expect("Failed to retrieve client capabilities");
-
+        // println!("f2");
         if let Some(document) = workspace.find(&uri) {
+            // println!("f3");
             let options = self.configuration(true).await;
+            // println!("f4");
             Ok(FeatureRequest {
                 params,
                 view: DocumentView::new(workspace, document, &options),
@@ -703,6 +739,7 @@ impl<C: LspClient + Send + Sync + 'static> Middleware for LatexLspServer<C> {
                             if let SyntaxTree::Latex(_) = &document.tree {
                                 let mut diagnostics_manager = self.diagnostics_manager.lock().await;
                                 diagnostics_manager.latex.update(&uri, &document.text);
+                                diagnostics_manager.english.update(&uri, &document.text);
                             }
                         }
                     }

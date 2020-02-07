@@ -1,6 +1,7 @@
 mod bibtex;
 // mod build;
 mod latex;
+mod english;
 
 pub use self::bibtex::BibtexErrorCode;
 
@@ -17,6 +18,7 @@ pub struct DiagnosticsManager {
     // pub build: BuildDiagnosticsProvider,
     pub latex: LatexDiagnosticsProvider,
     pub bibtex: BibtexDiagnosticsProvider,
+    pub english: EnglishDiagnosticsProvider,
 }
 
 impl DiagnosticsManager {
@@ -25,6 +27,7 @@ impl DiagnosticsManager {
         // diagnostics.append(&mut self.build.get(document));
         diagnostics.append(&mut self.latex.get(document));
         diagnostics.append(&mut self.bibtex.get(document));
+        diagnostics.append(&mut self.english.get(document));
         diagnostics
     }
 }

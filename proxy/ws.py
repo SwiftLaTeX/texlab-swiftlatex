@@ -73,6 +73,7 @@ async def client_handler(websocket, project_id, channel_id, remote_writer):
         if packet["kind"] == "data":
             content = packet["content"]
             content = rewrite_client2server_path(content, project_id)
+            print(content)
             remote_writer.write(pack_remote_message(content))
         else:
             break
@@ -85,6 +86,7 @@ async def server_handler(websocket, project_id, channel_id, remote_reader):
             return
         payload = rewrite_server2client_path(payload.decode('utf-8'), project_id)
         data = {"kind": "data", "id": channel_id, "content": payload}
+        print(data)
         await websocket.send(json.dumps(data))
 
     # traceback.print_exc()
