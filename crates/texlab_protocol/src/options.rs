@@ -68,6 +68,7 @@ pub struct LatexOptions {
     pub forward_search: Option<LatexForwardSearchOptions>,
     pub lint: Option<LatexLintOptions>,
     pub build: Option<LatexBuildOptions>,
+    pub root_directory: Option<PathBuf>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Default, Serialize, Deserialize)]
@@ -87,12 +88,31 @@ impl Options {
     pub fn resolve_output_file(&self, tex_path: &Path, extension: &str) -> Option<PathBuf> {
         let stem = tex_path.file_stem()?.to_str()?;
         let name = format!("{}.{}", stem, extension);
-        let output_directory = self
-            .latex
+
+        self.latex
             .as_ref()
             .and_then(|latex| latex.build.as_ref())
-            .and_then(|build| build.output_directory.clone())
-            .unwrap_or_else(|| PathBuf::from("."));
-        Some(tex_path.parent()?.join(output_directory).join(name))
+            .and_then(|build| build.output_directory.as_ref())
+            .map(|path| path.join(&name))
+            .and_then(|path| dunce::canonicalize(path).ok())
+            .or_else(|| {
+                self.latex
+                    .as_ref()
+                    .and_then(|latex| latex.root_directory.as_ref())
+                    .map(|path| path.join(&name))
+                    .and_then(|path| dunce::canonicalize(path).ok())
+            })
+            .or_else(|| {
+                self.latex
+                    .as_ref()
+                    .and_then(|latex| latex.build.as_ref())
+                    .and_then(|build| build.output_directory.as_ref())
+                    .and_then(|path| {
+                        tex_path
+                            .parent()
+                            .map(|parent| parent.join(path).join(&name))
+                    })
+            })
+            .or_else(|| tex_path.parent().map(|path| path.join(&name)))
     }
 }

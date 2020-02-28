@@ -76,17 +76,7 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
         }
     }
 
-    pub async fn execute<'a, T, A>(&'a self, action: A) -> T
-    where
-        A: FnOnce(&'a Self) -> T,
-    {
-        self.before_message().await;
-        let result = action(&self);
-        self.after_message().await;
-        result
-    }
-
-    pub async fn execute_async<'a, T, F, A>(&'a self, action: A) -> T
+    pub async fn execute<'a, T, F, A>(&'a self, action: A) -> T
     where
         F: Future<Output = T>,
         A: FnOnce(&'a Self) -> F,
@@ -161,10 +151,11 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
     }
 
     #[jsonrpc_method("initialized", kind = "notification")]
-    pub fn initialized(&self, _params: InitializedParams) {
+    pub async fn initialized(&self, _params: InitializedParams) {
         self.action_manager.push(Action::RegisterCapabilities);
         self.action_manager.push(Action::PublishDiagnostics);
         self.action_manager.push(Action::LoadDistribution);
+        self.action_manager.push(Action::LoadConfiguration);
     }
 
     #[jsonrpc_method("shutdown", kind = "request")]
@@ -173,16 +164,16 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
     }
 
     #[jsonrpc_method("exit", kind = "notification")]
-    pub fn exit(&self, _params: ()) {}
+    pub async fn exit(&self, _params: ()) {}
 
     #[jsonrpc_method("$/cancelRequest", kind = "notification")]
-    pub fn cancel_request(&self, _params: CancelParams) {}
+    pub async fn cancel_request(&self, _params: CancelParams) {}
 
     #[jsonrpc_method("textDocument/didOpen", kind = "notification")]
-    pub fn did_open(&self, params: DidOpenTextDocumentParams) {
-        // println!("did_open request starts");
+    pub async fn did_open(&self, params: DidOpenTextDocumentParams) {
         let uri = params.text_document.uri.clone();
-        self.workspace_manager.add(params.text_document);
+        let options = self.configuration(false).await;
+        self.workspace_manager.add(params.text_document, &options);
         self.action_manager
             .push(Action::DetectRoot(uri.clone().into()));
         self.action_manager
@@ -192,11 +183,12 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
     }
 
     #[jsonrpc_method("textDocument/didChange", kind = "notification")]
-    pub fn did_change(&self, params: DidChangeTextDocumentParams) {
-        // println!("did_change request starts");
+    pub async fn did_change(&self, params: DidChangeTextDocumentParams) {
+        let options = self.configuration(false).await;
         for change in params.content_changes {
             let uri = params.text_document.uri.clone();
-            self.workspace_manager.update(uri.into(), change.text);
+            self.workspace_manager
+                .update(uri.into(), change.text, &options);
         }
         self.action_manager.push(Action::RunLinter(
             params.text_document.uri.into(),
@@ -207,8 +199,7 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
     }
 
     #[jsonrpc_method("textDocument/didSave", kind = "notification")]
-    pub fn did_save(&self, params: DidSaveTextDocumentParams) {
-        // println!("did_save request starts");
+    pub async fn did_save(&self, params: DidSaveTextDocumentParams) {
         self.action_manager.push(Action::RunLinter(
             params.text_document.uri.clone().into(),
             LintReason::Save,
@@ -220,19 +211,17 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
     }
 
     #[jsonrpc_method("textDocument/didClose", kind = "notification")]
-    pub fn did_close(&self, _params: DidCloseTextDocumentParams) {}
+    pub async fn did_close(&self, _params: DidCloseTextDocumentParams) {}
 
     #[jsonrpc_method("workspace/didChangeConfiguration", kind = "notification")]
-    pub fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
-        // println!("did_change_configuration request starts");
+    pub async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
         self.action_manager
             .push(Action::UpdateConfiguration(params.settings));
         // println!("did_change_configuration request done");
     }
 
     #[jsonrpc_method("window/workDoneProgress/cancel", kind = "notification")]
-    pub fn work_done_progress_cancel(&self, params: WorkDoneProgressCancelParams) {
-        // println!("cancel request starts");
+    pub async fn work_done_progress_cancel(&self, params: WorkDoneProgressCancelParams) {
         self.action_manager.push(Action::CancelBuild(params.token));
         // println!("cancel request done");
     }
@@ -547,7 +536,7 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
             let workspace = self.workspace_manager.get();
             for path in workspace.unresolved_includes(&options) {
                 if path.exists() {
-                    changed |= self.workspace_manager.load(&path).is_ok();
+                    changed |= self.workspace_manager.load(&path, &options).is_ok();
                 }
             }
 
@@ -557,7 +546,11 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
         }
     }
 
-    fn update_document(&self, document: &Document) -> std::result::Result<(), WorkspaceLoadError> {
+    fn update_document(
+        &self,
+        document: &Document,
+        options: &Options,
+    ) -> std::result::Result<(), WorkspaceLoadError> {
         if document.uri.scheme() != "file" {
             return Ok(());
         }
@@ -565,7 +558,7 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
         let path = document.uri.to_file_path().unwrap();
         let data = fs::metadata(&path).map_err(WorkspaceLoadError::IO)?;
         if data.modified().map_err(WorkspaceLoadError::IO)? > document.modified {
-            self.workspace_manager.load(&path)
+            self.workspace_manager.load(&path, &options)
         } else {
             Ok(())
         }
@@ -624,7 +617,7 @@ impl<C: LspClient + Send + Sync + 'static> LatexLspServer<C> {
                 {
                     if let Ok(parent_uri) = Uri::from_file_path(entry.path()) {
                         if workspace.find(&parent_uri).is_none() {
-                            let _ = self.workspace_manager.load(entry.path());
+                            let _ = self.workspace_manager.load(entry.path(), &options);
                         }
                     }
                 }
@@ -638,9 +631,10 @@ impl<C: LspClient + Send + Sync + 'static> Middleware for LatexLspServer<C> {
     async fn before_message(&self) {
         self.detect_children().await;
 
+        let options = self.configuration(false).await;
         let workspace = self.workspace_manager.get();
         for document in &workspace.documents {
-            let _ = self.update_document(document);
+            let _ = self.update_document(document, &options);
         }
     }
 
@@ -698,6 +692,15 @@ impl<C: LspClient + Send + Sync + 'static> Middleware for LatexLspServer<C> {
                         };
                         self.client.show_message(params).await;
                     };
+                }
+                Action::LoadConfiguration => {
+                    let options = self.configuration(true).await;
+                    let workspace = self.workspace_manager.get();
+                    for document in &workspace.documents {
+                        if let Ok(path) = document.uri.to_file_path() {
+                            let _ = self.workspace_manager.load(&path, &options);
+                        }
+                    }
                 }
                 Action::UpdateConfiguration(settings) => {
                     self.config_strategy.get().unwrap().set(settings).await;
